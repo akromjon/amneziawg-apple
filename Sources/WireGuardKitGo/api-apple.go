@@ -28,6 +28,7 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/conn"
 	"github.com/amnezia-vpn/amneziawg-go/device"
 	"github.com/amnezia-vpn/amneziawg-go/tun"
+	vipnbuild "github.com/akromjon/amneziawg-apple/internal/buildinfo"
 )
 
 // Unique tunnel core identifiers embedded in the compiled binary.
@@ -43,7 +44,7 @@ func wgVipnBuildVariant() *C.char {
 var loggerFunc unsafe.Pointer
 var loggerCtx unsafe.Pointer
 
-type CLogger int
+type vipnLogger int
 
 func cstring(s string) *C.char {
 	b, err := unix.BytePtrFromString(s)
@@ -54,21 +55,22 @@ func cstring(s string) *C.char {
 	return (*C.char)(unsafe.Pointer(b))
 }
 
-func (l CLogger) Printf(format string, args ...interface{}) {
+func (l vipnLogger) Printf(format string, args ...interface{}) {
 	if uintptr(loggerFunc) == 0 {
 		return
 	}
 	C.callLogger(loggerFunc, loggerCtx, C.int(l), cstring(fmt.Sprintf(format, args...)))
 }
 
-type tunnelHandle struct {
+type vipnTunnelSession struct {
 	*device.Device
 	*device.Logger
 }
 
-var tunnelHandles = make(map[int32]tunnelHandle)
+var vipnSessions = make(map[int32]vipnTunnelSession)
 
 func init() {
+	vipnbuild.Init()
 	signals := make(chan os.Signal)
 	signal.Notify(signals, unix.SIGUSR2)
 	go func() {
@@ -95,8 +97,8 @@ func wgSetLogger(context, loggerFn uintptr) {
 //export wgTurnOn
 func wgTurnOn(settings *C.char, tunFd int32) int32 {
 	logger := &device.Logger{
-		Verbosef: CLogger(0).Printf,
-		Errorf:   CLogger(1).Printf,
+		Verbosef: vipnLogger(0).Printf,
+		Errorf:   vipnLogger(1).Printf,
 	}
 	dupTunFd, err := unix.Dup(int(tunFd))
 	if err != nil {
@@ -131,7 +133,7 @@ func wgTurnOn(settings *C.char, tunFd int32) int32 {
 
 	var i int32
 	for i = 0; i < math.MaxInt32; i++ {
-		if _, exists := tunnelHandles[i]; !exists {
+		if _, exists := vipnSessions[i]; !exists {
 			break
 		}
 	}
@@ -139,23 +141,23 @@ func wgTurnOn(settings *C.char, tunFd int32) int32 {
 		unix.Close(dupTunFd)
 		return -1
 	}
-	tunnelHandles[i] = tunnelHandle{dev, logger}
+	vipnSessions[i] = vipnTunnelSession{dev, logger}
 	return i
 }
 
 //export wgTurnOff
 func wgTurnOff(tunnelHandle int32) {
-	dev, ok := tunnelHandles[tunnelHandle]
+	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return
 	}
-	delete(tunnelHandles, tunnelHandle)
+	delete(vipnSessions, tunnelHandle)
 	dev.Close()
 }
 
 //export wgSetConfig
 func wgSetConfig(tunnelHandle int32, settings *C.char) int64 {
-	dev, ok := tunnelHandles[tunnelHandle]
+	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return 0
 	}
@@ -172,7 +174,7 @@ func wgSetConfig(tunnelHandle int32, settings *C.char) int64 {
 
 //export wgGetConfig
 func wgGetConfig(tunnelHandle int32) *C.char {
-	device, ok := tunnelHandles[tunnelHandle]
+	device, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return nil
 	}
@@ -185,7 +187,7 @@ func wgGetConfig(tunnelHandle int32) *C.char {
 
 //export wgBumpSockets
 func wgBumpSockets(tunnelHandle int32) {
-	dev, ok := tunnelHandles[tunnelHandle]
+	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return
 	}
@@ -205,7 +207,7 @@ func wgBumpSockets(tunnelHandle int32) {
 
 //export wgDisableSomeRoamingForBrokenMobileSemantics
 func wgDisableSomeRoamingForBrokenMobileSemantics(tunnelHandle int32) {
-	dev, ok := tunnelHandles[tunnelHandle]
+	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return
 	}
