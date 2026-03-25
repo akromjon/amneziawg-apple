@@ -30,6 +30,16 @@ import (
 	"github.com/amnezia-vpn/amneziawg-go/tun"
 )
 
+// Unique tunnel core identifiers embedded in the compiled binary.
+// These differentiate this build from upstream at the binary level.
+const vipnTunnelVariant = "VIPN-SecureTunnel"
+const vipnTunnelVendor = "com.vipn.app.tunnelcore"
+
+//export wgVipnBuildVariant
+func wgVipnBuildVariant() *C.char {
+	return C.CString(vipnTunnelVendor)
+}
+
 var loggerFunc unsafe.Pointer
 var loggerCtx unsafe.Pointer
 

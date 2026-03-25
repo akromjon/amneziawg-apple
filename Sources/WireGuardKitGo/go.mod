@@ -1,4 +1,4 @@
-module github.com/amnezia-vpn/amneziawg-apple
+module github.com/akromjon/amneziawg-apple
 
 go 1.26
 
