@@ -88,14 +88,14 @@ func init() {
 	}()
 }
 
-//export wgSetLogger
-func wgSetLogger(context, loggerFn uintptr) {
+//export vipnTunnelSetLogger
+func vipnTunnelSetLogger(context, loggerFn uintptr) {
 	loggerCtx = unsafe.Pointer(context)
 	loggerFunc = unsafe.Pointer(loggerFn)
 }
 
-//export wgTurnOn
-func wgTurnOn(settings *C.char, tunFd int32) int32 {
+//export vipnTunnelStart
+func vipnTunnelStart(settings *C.char, tunFd int32) int32 {
 	logger := &device.Logger{
 		Verbosef: vipnLogger(0).Printf,
 		Errorf:   vipnLogger(1).Printf,
@@ -145,8 +145,8 @@ func wgTurnOn(settings *C.char, tunFd int32) int32 {
 	return i
 }
 
-//export wgTurnOff
-func wgTurnOff(tunnelHandle int32) {
+//export vipnTunnelStop
+func vipnTunnelStop(tunnelHandle int32) {
 	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return
@@ -155,8 +155,8 @@ func wgTurnOff(tunnelHandle int32) {
 	dev.Close()
 }
 
-//export wgSetConfig
-func wgSetConfig(tunnelHandle int32, settings *C.char) int64 {
+//export vipnTunnelSetConfig
+func vipnTunnelSetConfig(tunnelHandle int32, settings *C.char) int64 {
 	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return 0
@@ -172,8 +172,8 @@ func wgSetConfig(tunnelHandle int32, settings *C.char) int64 {
 	return 0
 }
 
-//export wgGetConfig
-func wgGetConfig(tunnelHandle int32) *C.char {
+//export vipnTunnelGetConfig
+func vipnTunnelGetConfig(tunnelHandle int32) *C.char {
 	device, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return nil
@@ -185,8 +185,8 @@ func wgGetConfig(tunnelHandle int32) *C.char {
 	return C.CString(settings)
 }
 
-//export wgBumpSockets
-func wgBumpSockets(tunnelHandle int32) {
+//export vipnTunnelRefreshSockets
+func vipnTunnelRefreshSockets(tunnelHandle int32) {
 	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return
@@ -205,8 +205,8 @@ func wgBumpSockets(tunnelHandle int32) {
 	}()
 }
 
-//export wgDisableSomeRoamingForBrokenMobileSemantics
-func wgDisableSomeRoamingForBrokenMobileSemantics(tunnelHandle int32) {
+//export vipnTunnelDisableRoaming
+func vipnTunnelDisableRoaming(tunnelHandle int32) {
 	dev, ok := vipnSessions[tunnelHandle]
 	if !ok {
 		return
@@ -214,8 +214,8 @@ func wgDisableSomeRoamingForBrokenMobileSemantics(tunnelHandle int32) {
 	dev.DisableSomeRoamingForBrokenMobileSemantics()
 }
 
-//export wgVersion
-func wgVersion() *C.char {
+//export vipnTunnelVersion
+func vipnTunnelVersion() *C.char {
 	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return C.CString("unknown")

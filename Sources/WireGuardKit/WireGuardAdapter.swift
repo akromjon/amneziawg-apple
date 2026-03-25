@@ -98,7 +98,7 @@ public class WireGuardAdapter {
 
     /// Returns a WireGuard version.
     class var backendVersion: String {
-        guard let ver = wgVersion() else { return "unknown" }
+        guard let ver = vipnTunnelVersion() else { return "unknown" }
         let str = String(cString: ver)
         free(UnsafeMutableRawPointer(mutating: ver))
         return str
@@ -146,14 +146,14 @@ public class WireGuardAdapter {
     deinit {
         // Force remove logger to make sure that no further calls to the instance of this class
         // can happen after deallocation.
-        wgSetLogger(nil, nil)
+        vipnTunnelSetLogger(nil, nil)
 
         // Cancel network monitor
         networkMonitor?.cancel()
 
         // Shutdown the tunnel
         if case .started(let handle, _) = self.state {
-            wgTurnOff(handle)
+            vipnTunnelStop(handle)
         }
     }
 
@@ -169,7 +169,7 @@ public class WireGuardAdapter {
                 return
             }
 
-            if let settings = wgGetConfig(handle) {
+            if let settings = vipnTunnelGetConfig(handle) {
                 completionHandler(String(cString: settings))
                 free(settings)
             } else {
@@ -228,7 +228,7 @@ public class WireGuardAdapter {
             self.logHandler(.verbose, "Adapter stop requested (state=\(self.state))")
             switch self.state {
             case .started(let handle, _):
-                wgTurnOff(handle)
+                vipnTunnelStop(handle)
 
             case .temporaryShutdown:
                 break
@@ -278,9 +278,9 @@ public class WireGuardAdapter {
                     let (wgConfig, resolutionResults) = settingsGenerator.uapiConfiguration()
                     self.logEndpointResolutionResults(resolutionResults)
 
-                    wgSetConfig(handle, wgConfig)
+                    vipnTunnelSetConfig(handle, wgConfig)
                     #if os(iOS)
-                    wgDisableSomeRoamingForBrokenMobileSemantics(handle)
+                    vipnTunnelDisableRoaming(handle)
                     #endif
 
                     self.state = .started(handle, settingsGenerator)
@@ -306,7 +306,7 @@ public class WireGuardAdapter {
     /// Setup WireGuard log handler.
     private func setupLogHandler() {
         let context = Unmanaged.passUnretained(self).toOpaque()
-        wgSetLogger(context) { context, logLevel, message in
+        vipnTunnelSetLogger(context) { context, logLevel, message in
             guard let context = context, let message = message else { return }
 
             let unretainedSelf = Unmanaged<WireGuardAdapter>.fromOpaque(context)
@@ -393,13 +393,13 @@ public class WireGuardAdapter {
         }
 
         self.logHandler(.verbose, "Starting WireGuard backend (config bytes: \(wgConfig.utf8.count), fd: \(tunnelFileDescriptor))")
-        let handle = wgTurnOn(wgConfig, tunnelFileDescriptor)
+        let handle = vipnTunnelStart(wgConfig, tunnelFileDescriptor)
         if handle < 0 {
             throw WireGuardAdapterError.startWireGuardBackend(handle)
         }
         self.logHandler(.verbose, "WireGuard backend started with handle \(handle)")
         #if os(iOS)
-        wgDisableSomeRoamingForBrokenMobileSemantics(handle)
+        vipnTunnelDisableRoaming(handle)
         #endif
         return handle
     }
@@ -456,7 +456,7 @@ public class WireGuardAdapter {
 
         #if os(macOS)
         if case .started(let handle, _) = self.state {
-            wgBumpSockets(handle)
+            vipnTunnelRefreshSockets(handle)
         }
         #elseif os(iOS)
         switch self.state {
@@ -466,15 +466,15 @@ public class WireGuardAdapter {
                 let (wgConfig, resolutionResults) = settingsGenerator.endpointUapiConfiguration()
                 self.logEndpointResolutionResults(resolutionResults)
 
-                wgSetConfig(handle, wgConfig)
-                wgDisableSomeRoamingForBrokenMobileSemantics(handle)
-                wgBumpSockets(handle)
+                vipnTunnelSetConfig(handle, wgConfig)
+                vipnTunnelDisableRoaming(handle)
+                vipnTunnelRefreshSockets(handle)
             } else {
                 if self.shouldPauseBackendOnUnsatisfiedPath() {
                     self.logHandler(.verbose, "Connectivity offline, pausing backend.")
 
                     self.state = .temporaryShutdown(settingsGenerator)
-                    wgTurnOff(handle)
+                    vipnTunnelStop(handle)
                 } else {
                     let remaining = self.remainingUnsatisfiedGraceSeconds()
                     if remaining > 0 {
@@ -549,7 +549,7 @@ public class WireGuardAdapter {
 
     private func updateEverHadHandshake(handle: Int32) {
         guard !self.everHadHandshake else { return }
-        guard let settings = wgGetConfig(handle) else { return }
+        guard let settings = vipnTunnelGetConfig(handle) else { return }
         let config = String(cString: settings)
         free(settings)
 
